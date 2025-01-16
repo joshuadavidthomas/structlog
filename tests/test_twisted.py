@@ -35,6 +35,9 @@ except ImportError:
 
 
 def test_LoggerFactory():
+    """
+    Logger factory ultimately returns twisted.python.log for output.
+    """
     from twisted.python import log
 
     assert log is LoggerFactory()()
@@ -100,7 +103,10 @@ class TestExtractStuffAndWhy:
         """
         Raise ValueError if both _stuff and event contain exceptions.
         """
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(
+            ValueError,
+            match="Both _stuff and event contain an Exception/Failure.",
+        ):
             _extractStuffAndWhy(
                 {
                     "_stuff": Failure(ValueError()),
@@ -108,19 +114,14 @@ class TestExtractStuffAndWhy:
                 }
             )
 
-        assert (
-            "Both _stuff and event contain an Exception/Failure."
-            == e.value.args[0]
-        )
-
     def test_failsOnConflictingEventAnd_why(self):
         """
         Raise ValueError if both _why and event are in the event_dict.
         """
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(
+            ValueError, match="Both `_why` and `event` supplied."
+        ):
             _extractStuffAndWhy({"_why": "foo", "event": "bar"})
-
-        assert "Both `_why` and `event` supplied." == e.value.args[0]
 
     def test_handlesFailures(self):
         """
@@ -148,6 +149,9 @@ class TestEventAdapter:
     """
 
     def test_EventAdapterFormatsLog(self):
+        """
+        EventAdapter formats log entries correctly.
+        """
         la = EventAdapter(_render_repr)
 
         assert "{'foo': 'bar'}" == la(None, "msg", {"foo": "bar"})
@@ -212,12 +216,15 @@ class TestEventAdapter:
         )
 
     def test_catchesConflictingEventAnd_why(self):
+        """
+        Passing both _why and event raises a ValueError.
+        """
         la = EventAdapter(_render_repr)
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(
+            ValueError, match="Both `_why` and `event` supplied."
+        ):
             la(None, "err", {"event": "someEvent", "_why": "someReason"})
-
-        assert "Both `_why` and `event` supplied." == e.value.args[0]
 
 
 @pytest.fixture
@@ -264,6 +271,9 @@ class TestJSONRenderer:
         )
 
     def test_handlesFailure(self, jr):
+        """
+        JSONRenderer renders failures correctly.
+        """
         rv = jr(None, "err", {"event": Failure(ValueError())})[0][0].string
 
         assert "Failure: builtins.ValueError" in rv
@@ -287,9 +297,15 @@ class TestReprWrapper:
 
 class TestPlainFileLogObserver:
     def test_isLogObserver(self, sio):
+        """
+        PlainFileLogObserver is an ILogObserver.
+        """
         assert ILogObserver.providedBy(PlainFileLogObserver(sio))
 
     def test_writesOnlyMessageWithLF(self, sio):
+        """
+        PlainFileLogObserver writes only the message and a line feed.
+        """
         PlainFileLogObserver(sio)(
             {"system": "some system", "message": ("hello",)}
         )
@@ -299,6 +315,9 @@ class TestPlainFileLogObserver:
 
 class TestJSONObserverWrapper:
     def test_IsAnObserver(self):
+        """
+        JSONLogObserverWrapper is an ILogObserver.
+        """
         assert ILogObserver.implementedBy(JSONLogObserverWrapper)
 
     def test_callsWrappedObserver(self):
@@ -335,4 +354,7 @@ class TestJSONObserverWrapper:
 
 class TestPlainJSONStdOutLogger:
     def test_isLogObserver(self):
+        """
+        plainJSONStdOutLogger is an ILogObserver.
+        """
         assert ILogObserver.providedBy(plainJSONStdOutLogger())

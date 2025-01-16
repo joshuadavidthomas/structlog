@@ -17,11 +17,20 @@ from contextlib import contextmanager
 from typing import Any, Generator, NamedTuple, NoReturn
 
 from ._config import configure, get_config
+from ._log_levels import map_method_name
 from .exceptions import DropEvent
 from .typing import EventDict, WrappedLogger
 
 
-__all__ = ["LogCapture", "capture_logs"]
+__all__ = [
+    "CapturedCall",
+    "CapturingLogger",
+    "CapturingLoggerFactory",
+    "LogCapture",
+    "ReturnLogger",
+    "ReturnLoggerFactory",
+    "capture_logs",
+]
 
 
 class LogCapture:
@@ -33,6 +42,10 @@ class LogCapture:
     :ivar List[structlog.typing.EventDict] entries: The captured log entries.
 
     .. versionadded:: 20.1.0
+
+    .. versionchanged:: 24.3.0
+       Added mapping from "exception" to "error"
+       Added mapping from "warn" to "warning"
     """
 
     entries: list[EventDict]
@@ -43,7 +56,7 @@ class LogCapture:
     def __call__(
         self, _: WrappedLogger, method_name: str, event_dict: EventDict
     ) -> NoReturn:
-        event_dict["log_level"] = method_name
+        event_dict["log_level"] = map_method_name(method_name)
         self.entries.append(event_dict)
 
         raise DropEvent
@@ -100,8 +113,8 @@ class ReturnLogger:
         # Slightly convoluted for backwards compatibility.
         if len(args) == 1 and not kw:
             return args[0]
-        else:
-            return args, kw
+
+        return args, kw
 
     log = debug = info = warn = warning = msg
     fatal = failure = err = error = critical = exception = msg
@@ -131,9 +144,12 @@ class CapturedCall(NamedTuple):
 
     Can also be unpacked like a tuple.
 
-    :param method_name: The method name that got called.
-    :param args: A tuple of the positional arguments.
-    :param kwargs: A dict of the keyword arguments.
+    Args:
+        method_name: The method name that got called.
+
+        args: A tuple of the positional arguments.
+
+        kwargs: A dict of the keyword arguments.
 
     .. versionadded:: 20.2.0
     """
@@ -161,7 +177,7 @@ class CapturingLogger:
         self.calls = []
 
     def __repr__(self) -> str:
-        return f"<CapturingLogger with { len(self.calls) } call(s)>"
+        return f"<CapturingLogger with {len(self.calls)} call(s)>"
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -188,6 +204,7 @@ class CapturingLoggerFactory:
 
     .. versionadded:: 20.2.0
     """
+
     logger: CapturingLogger
 
     def __init__(self) -> None:

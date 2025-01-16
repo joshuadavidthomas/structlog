@@ -1,6 +1,6 @@
 # Why …
 
-## … Structured Logging?
+## … structured logging?
 
 > I believe the widespread use of format strings in logging is based on two presumptions:
 >
@@ -21,7 +21,7 @@ More general advice about production-grade logging can be found in the later cha
 
 ## … structlog?
 
-### Easier Logging
+### Easier logging
 
 You can stop writing prose and start thinking in terms of an event that happens in the context of key-value pairs:
 
@@ -42,7 +42,7 @@ You can still use string interpolation using positional arguments:
 2022-10-10 07:19:25 [info     ] Hello, world!
 ```
 
-### Data Binding
+### Data binding
 
 Since log entries are dictionaries, you can start binding and re-binding key-value pairs to your loggers to ensure they are present in every following logging call:
 
@@ -53,10 +53,10 @@ Since log entries are dictionaries, you can start binding and re-binding key-val
 2020-11-18 09:18:28 [info     ] user.logged_in    another_key=42 happy=True some_key=23 user=hynek
 ```
 
-You can also bind key-value pairs to {doc}`context variables <contextvars>` that look global, but are local to your thread or *asyncio* context (i.e. usually your request).
+You can also bind key-value pairs to {doc}`context variables <contextvars>` that look global, but are local to your thread or *asyncio* context -- which usually means your web request.
 
 
-### Powerful Pipelines
+### Powerful pipelines
 
 Each log entry goes through a [processor pipeline](processors.md) that is just a chain of functions that receive a dictionary and return a new dictionary that gets fed into the next function.
 That allows for simple but powerful data manipulation:
@@ -81,7 +81,7 @@ There are [plenty of processors](structlog.processors) for most common tasks com
 Since each log entry is a dictionary, it can be formatted to **any** format:
 
 - A colorful key-value format for [local development](console-output.md),
-- [JSON](structlog.processors.JSONRenderer) of [*logfmt*](structlog.processors.LogfmtRenderer) for easy parsing,
+- [JSON](structlog.processors.JSONRenderer) or [*logfmt*](structlog.processors.LogfmtRenderer) for easy parsing,
 - or some standard format you have parsers for like *nginx* or Apache *httpd*.
 
 Internally, formatters are processors whose return value (usually a string) is passed into loggers that are responsible for the output of your message.
@@ -103,7 +103,7 @@ Internally, formatters are processors whose return value (usually a string) is p
   Reported use cases are sending them out via network or saving them to a database.
 
 
-### Highly Testable
+### Highly testable
 
 *structlog* is thoroughly tested and we see it as our duty to help you to achieve the same in *your* applications.
 That's why it ships with a [test helpers](testing.md) to introspect your application's logging behavior with little-to-no boilerplate.

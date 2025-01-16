@@ -1,21 +1,20 @@
 # Logging Best Practices
 
-Logging is not a new concept and in no way special to Python.
-Logfiles have existed for decades and there's little reason to reinvent the wheel in our little world.
-
-Therefore let's rely on proven tools as much as possible and do only the absolutely necessary inside of Python[^unix].
+Logging is not a new concept and is in no way unique to Python.
+Logfiles have existed for decades, and there's little reason to reinvent the wheel in our little world.
+Therefore, let's rely on proven tools as much as possible and do only the bare minimum inside Python applications[^unix].
 
 A simple but powerful approach is to log to unbuffered [standard out](https://en.wikipedia.org/wiki/Standard_out#Standard_output_.28stdout.29
 ) and let other tools take care of the rest.
-That can be your terminal window while developing, it can be [*systemd*](https://en.wikipedia.org/wiki/Systemd) redirecting your log entries to [*syslogd*](https://en.wikipedia.org/wiki/Syslogd), or your [cluster manager](https://kubernetes.io/docs/concepts/cluster-administration/logging/).
-It doesn't matter where or how your application is running, it just works.
 
-This is why the popular [*Twelve-Factor App* methodology](https://12factor.net/logs) suggests just that.
+That can be your terminal window while developing; it can be [*systemd*](https://en.wikipedia.org/wiki/Systemd) redirecting your log entries to [*syslogd*](https://en.wikipedia.org/wiki/Syslogd) and rotating them using [*logrotate*](https://github.com/logrotate/logrotate); or it can be your [cluster manager](https://kubernetes.io/docs/concepts/cluster-administration/logging/) forwarding them to an obscenely expensive log aggregator service.
+
+It doesn't matter where or how your application runs -- it just works, and the reason why the popular [*Twelve-Factor App* methodology](https://12factor.net/logs) suggests just that.
 
 [^unix]: This is obviously a privileged UNIX-centric view but even Windows has tools and means for log management although we won't be able to discuss them here.
 
 
-## Canonical Log Lines
+## Canonical log lines
 
 Generally speaking, having as few log entries per request as possible is a good thing.
 The less noise, the more insights.
@@ -25,7 +24,7 @@ The less noise, the more insights.
 At Stripe, this concept is called [Canonical Log Lines](https://brandur.org/canonical-log-lines).
 
 
-## Pretty Printing vs. Structured Output
+## Pretty printing vs. structured output
 
 Colorful and pretty printed log messages are nice during development when you locally run your code.
 
@@ -36,35 +35,33 @@ This makes analyzing errors easier, since log aggregators can render JSON much b
 
 Here is a simple example of how you can have pretty logs during development and JSON output when your app is running in a production context:
 
-```{eval-rst}
-.. doctest::
-
-   >>> import sys
-   >>> import structlog
-   >>>
-   >>> shared_processors = [
-   ...     # Processors that have nothing to do with output,
-   ...     # e.g., add timestamps or log level names.
-   ... ]
-   >>> if sys.stderr.isatty():
-   ...     # Pretty printing when we run in a terminal session.
-   ...     # Automatically prints pretty tracebacks when "rich" is installed
-   ...     processors = shared_processors + [
-   ...         structlog.dev.ConsoleRenderer(),
-   ...     ]
-   ... else:
-   ...     # Print JSON when we run, e.g., in a Docker container.
-   ...     # Also print structured tracebacks.
-   ...     processors = shared_processors + [
-   ...         structlog.processors.dict_tracebacks,
-   ...         structlog.processors.JSONRenderer(),
-   ...     ]
-   >>> structlog.configure(processors)
+```{doctest}
+>>> import sys
+>>> import structlog
+>>>
+>>> shared_processors = [
+...     # Processors that have nothing to do with output,
+...     # e.g., add timestamps or log level names.
+... ]
+>>> if sys.stderr.isatty():
+...     # Pretty printing when we run in a terminal session.
+...     # Automatically prints pretty tracebacks when "rich" is installed
+...     processors = shared_processors + [
+...         structlog.dev.ConsoleRenderer(),
+...     ]
+... else:
+...     # Print JSON when we run, e.g., in a Docker container.
+...     # Also print structured tracebacks.
+...     processors = shared_processors + [
+...         structlog.processors.dict_tracebacks,
+...         structlog.processors.JSONRenderer(),
+...     ]
+>>> structlog.configure(processors)
 
 ```
 
 
-## Centralized Logging
+## Centralized logging
 
 Nowadays you usually don't want your log files in compressed archives distributed over dozens -- if not thousands -- of servers or cluster nodes.
 You want them in a single location.
@@ -73,24 +70,24 @@ Parsed, indexed, and easy to search.
 
 ### ELK
 
-The ELK stack ([*Elasticsearch*], [*Logstash*], [*Kibana*]) from Elastic is a great way to store, parse, and search your logs.
+The ELK stack ([**E**lasticsearch][elasticsearch], [**L**ogstash][logstash], [**K**ibana][kibana]) from Elastic is a great way to store, parse, and search your logs.
 
-The way it works is that you have local log shippers like [*Filebeat*] that parse your log files and forward the log entries to your [*Logstash*] server.
-Logstash parses the log entries and stores them in [*Elasticsearch*].
-Finally, you can view and search them in [*Kibana*].
+The way it works is that you have local log shippers like [Filebeat] that parse your log files and forward the log entries to your [Logstash] server.
+Logstash parses the log entries and stores them in [Elasticsearch].
+Finally, you can view and search them in [Kibana].
 
 If your log entries consist of a JSON dictionary, this is fairly easy and efficient.
-All you have to do is to tell [*Logstash*] either that your log entries are prepended with a timestamp from {class}`~structlog.processors.TimeStamper` or the name of your timestamp field.
+All you have to do is to tell [Logstash] either that your log entries are prepended with a timestamp from {class}`~structlog.processors.TimeStamper` or the name of your timestamp field.
 
 
 ### Graylog
 
-[Graylog](https://www.graylog.org/) goes one step further.
-It not only supports everything those above do (and then some); you can also directly log JSON entries towards it -- optionally even through an AMQP server (like [*RabbitMQ*](https://www.rabbitmq.com/)) for better reliability.
-Additionally, [Graylog's Extended Log Format](https://docs.graylog.org/docs/gelf) (GELF) allows for structured data which makes it an obvious choice to use together with *structlog*.
+[Graylog](https://graylog.org/) goes one step further.
+It not only supports everything those above do (and then some); you can also directly log JSON entries towards it -- optionally even through an AMQP server (like [RabbitMQ](https://www.rabbitmq.com/)) for better reliability.
+Additionally, [Graylog's Extended Log Format](https://go2docs.graylog.org/current/getting_in_log_data/gelf.html) (GELF) allows for structured data which makes it an obvious choice to use together with *structlog*.
 
 
-[*elasticsearch*]: https://www.elastic.co/elasticsearch
-[*filebeat*]: https://github.com/elastic/beats/tree/master/filebeat
-[*kibana*]: https://www.elastic.co/kibana
-[*logstash*]: https://www.elastic.co/logstash
+[elasticsearch]: https://www.elastic.co/elasticsearch
+[filebeat]: https://github.com/elastic/beats/tree/main/filebeat
+[kibana]: https://www.elastic.co/kibana
+[logstash]: https://www.elastic.co/logstash

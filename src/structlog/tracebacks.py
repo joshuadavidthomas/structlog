@@ -6,19 +6,28 @@
 """
 Extract a structured traceback from an exception.
 
-Contributed by Will McGugan (see
-https://github.com/hynek/structlog/pull/407#issuecomment-1150926246) from Rich:
-https://github.com/Textualize/rich/blob/972dedff/rich/traceback.py
+Based on work by Will McGugan
+<https://github.com/hynek/structlog/pull/407#issuecomment-1150926246>`_ from
+`rich.traceback
+<https://github.com/Textualize/rich/blob/972dedff/rich/traceback.py>`_.
 """
 
 from __future__ import annotations
 
 import os
+import os.path
 
 from dataclasses import asdict, dataclass, field
 from traceback import walk_tb
-from types import TracebackType
-from typing import Any, Tuple, Union
+from types import ModuleType, TracebackType
+from typing import Any, Iterable, Sequence, Tuple, Union
+
+
+try:
+    import rich
+    import rich.pretty
+except ImportError:
+    rich = None  # type: ignore[assignment]
 
 from .typing import ExcInfo
 
@@ -36,6 +45,7 @@ __all__ = [
 
 
 SHOW_LOCALS = True
+LOCALS_MAX_LENGTH = 10
 LOCALS_MAX_STRING = 80
 MAX_FRAMES = 50
 
@@ -51,12 +61,11 @@ class Frame:
     filename: str
     lineno: int
     name: str
-    line: str = ""
     locals: dict[str, str] | None = None
 
 
 @dataclass
-class SyntaxError_:
+class SyntaxError_:  # noqa: N801
     """
     Contains detailed information about :exc:`SyntaxError` exceptions.
     """
@@ -91,26 +100,71 @@ class Trace:
 
 
 def safe_str(_object: Any) -> str:
-    """Don't allow exceptions from __str__ to propegate."""
+    """Don't allow exceptions from __str__ to propagate."""
     try:
         return str(_object)
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         return f"<str-error {str(error)!r}>"
 
 
-def to_repr(obj: Any, max_string: int | None = None) -> str:
-    """Get repr string for an object, but catch errors."""
-    if isinstance(obj, str):
-        obj_repr = obj
-    else:
-        try:
-            obj_repr = repr(obj)
-        except Exception as error:
-            obj_repr = f"<repr-error {str(error)!r}>"
+def to_repr(
+    obj: Any,
+    max_length: int | None = None,
+    max_string: int | None = None,
+    use_rich: bool = True,
+) -> str:
+    """
+    Get repr string for an object, but catch errors.
 
-    if max_string is not None and len(obj_repr) > max_string:
-        truncated = len(obj_repr) - max_string
-        obj_repr = f"{obj_repr[:max_string]!r}+{truncated}"
+    :func:`repr()` is used for strings, too, so that secret wrappers that
+    inherit from :func:`str` and overwrite ``__repr__()`` are handled correctly
+    (i.e. secrets are not logged in plain text).
+
+    Args:
+        obj: Object to get a string representation for.
+
+        max_length: Maximum length of containers before abbreviating, or
+            ``None`` for no abbreviation.
+
+        max_string: Maximum length of string before truncating, or ``None`` to
+            disable truncating.
+
+        use_rich: If ``True`` (the default), use rich_ to compute the repr.
+            If ``False`` or if rich_ is not installed, fall back to a simpler
+            algorithm.
+
+    Returns:
+        The string representation of *obj*.
+
+    .. versionchanged:: 24.3.0
+       Added *max_length* argument.  Use :program:`rich` to render locals if it
+       is available.  Call :func:`repr()` on strings in fallback
+       implementation.
+    """
+    if use_rich and rich is not None:
+        # Let rich render the repr if it is available.
+        # It produces much better results for containers and dataclasses/attrs.
+        obj_repr = rich.pretty.traverse(
+            obj, max_length=max_length, max_string=max_string
+        ).render()
+    else:
+        # Generate a (truncated) repr if rich is not available.
+        # Handle str/bytes differently to get better results for truncated
+        # representations.  Also catch all errors, similarly to "safe_str()".
+        try:
+            if isinstance(obj, (str, bytes)):
+                if max_string is not None and len(obj) > max_string:
+                    truncated = len(obj) - max_string
+                    obj_repr = f"{obj[:max_string]!r}+{truncated}"
+                else:
+                    obj_repr = repr(obj)
+            else:
+                obj_repr = repr(obj)
+                if max_string is not None and len(obj_repr) > max_string:
+                    truncated = len(obj_repr) - max_string
+                    obj_repr = f"{obj_repr[:max_string]!r}+{truncated}"
+        except Exception as error:  # noqa: BLE001
+            obj_repr = f"<repr-error {str(error)!r}>"
 
     return obj_repr
 
@@ -121,23 +175,52 @@ def extract(
     traceback: TracebackType | None,
     *,
     show_locals: bool = False,
+    locals_max_length: int = LOCALS_MAX_LENGTH,
     locals_max_string: int = LOCALS_MAX_STRING,
+    locals_hide_dunder: bool = True,
+    locals_hide_sunder: bool = False,
+    use_rich: bool = True,
 ) -> Trace:
     """
     Extract traceback information.
 
-    :param exc_type: Exception type.
-    :param exc_value: Exception value.
-    :param traceback: Python Traceback object.
-    :param show_locals: Enable display of local variables. Defaults to False.
-    :param locals_max_string: Maximum length of string before truncating, or
-        ``None`` to disable.
-    :param max_frames: Maximum number of frames in each stack
+    Args:
+        exc_type: Exception type.
 
-    :returns: A Trace instance with structured information about all
-        exceptions.
+        exc_value: Exception value.
 
-    .. versionadded:: 22.1
+        traceback: Python Traceback object.
+
+        show_locals: Enable display of local variables. Defaults to False.
+
+        locals_max_length:
+            Maximum length of containers before abbreviating, or ``None`` for
+            no abbreviation.
+
+        locals_max_string:
+            Maximum length of string before truncating, or ``None`` to disable
+            truncating.
+
+        locals_hide_dunder:
+            Hide locals prefixed with double underscore.
+            Defaults to True.
+
+        locals_hide_sunder:
+            Hide locals prefixed with single underscore.
+            This implies hiding *locals_hide_dunder*.
+            Defaults to False.
+
+        use_rich: If ``True`` (the default), use rich_ to compute the repr.
+            If ``False`` or if rich_ is not installed, fall back to a simpler
+            algorithm.
+
+    Returns:
+        A Trace instance with structured information about all exceptions.
+
+    .. versionadded:: 22.1.0
+    .. versionchanged:: 24.3.0
+       Added *locals_max_length*, *locals_hide_sunder*, *locals_hide_dunder*
+       and *use_rich* arguments.
     """
 
     stacks: list[Stack] = []
@@ -162,20 +245,47 @@ def extract(
         stacks.append(stack)
         append = stack.frames.append  # pylint: disable=no-member
 
+        def get_locals(
+            iter_locals: Iterable[tuple[str, object]],
+        ) -> Iterable[tuple[str, object]]:
+            """Extract locals from an iterator of key pairs."""
+            if not (locals_hide_dunder or locals_hide_sunder):
+                yield from iter_locals
+                return
+            for key, value in iter_locals:
+                if locals_hide_dunder and key.startswith("__"):
+                    continue
+                if locals_hide_sunder and key.startswith("_"):
+                    continue
+                yield key, value
+
         for frame_summary, line_no in walk_tb(traceback):
             filename = frame_summary.f_code.co_filename
             if filename and not filename.startswith("<"):
                 filename = os.path.abspath(filename)
+            # Rich has this, but we are not rich and like to keep all frames:
+            # if frame_summary.f_locals.get("_rich_traceback_omit", False):
+            #     continue  # noqa: ERA001
+
             frame = Frame(
                 filename=filename or "?",
                 lineno=line_no,
                 name=frame_summary.f_code.co_name,
-                locals={
-                    key: to_repr(value, max_string=locals_max_string)
-                    for key, value in frame_summary.f_locals.items()
-                }
-                if show_locals
-                else None,
+                locals=(
+                    {
+                        key: to_repr(
+                            value,
+                            max_length=locals_max_length,
+                            max_string=locals_max_string,
+                            use_rich=use_rich,
+                        )
+                        for key, value in get_locals(
+                            frame_summary.f_locals.items()
+                        )
+                    }
+                    if show_locals
+                    else None
+                ),
             )
             append(frame)
 
@@ -202,50 +312,118 @@ def extract(
         # No cover, code is reached but coverage doesn't recognize it.
         break  # pragma: no cover
 
-    trace = Trace(stacks=stacks)
-    return trace
+    return Trace(stacks=stacks)
 
 
 class ExceptionDictTransformer:
     """
-    Return a list of exception stack dictionaries for for an exception.
+    Return a list of exception stack dictionaries for an exception.
 
     These dictionaries are based on :class:`Stack` instances generated by
     :func:`extract()` and can be dumped to JSON.
 
-    :param show_locals: Whether or not to include the values of a stack frame's
-        local variables.
-    :param locals_max_string: The maximum length after which long string
-        representations are truncated.
-    :param max_frames: Maximum number of frames in each stack.  Frames are
-        removed from the inside out.  The idea is, that the first frames
-        represent your code responsible for the exception and last frames the
-        code where the exception actually happened.  With larger web
-        frameworks, this does not always work, so you should stick with the
-        default.
+    Args:
+        show_locals:
+            Whether or not to include the values of a stack frame's local
+            variables.
+
+        locals_max_length:
+            Maximum length of containers before abbreviating, or ``None`` for
+            no abbreviation.
+
+        locals_max_string:
+            Maximum length of string before truncating, or ``None`` to disable
+            truncating.
+
+        locals_hide_dunder:
+            Hide locals prefixed with double underscore.
+            Defaults to True.
+
+        locals_hide_sunder:
+            Hide locals prefixed with single underscore.
+            This implies hiding *locals_hide_dunder*.
+            Defaults to False.
+
+        suppress:
+            Optional sequence of modules or paths for which to suppress the
+            display of locals even if *show_locals* is ``True``.
+
+        max_frames:
+            Maximum number of frames in each stack.  Frames are removed from
+            the inside out.  The idea is, that the first frames represent your
+            code responsible for the exception and last frames the code where
+            the exception actually happened.  With larger web frameworks, this
+            does not always work, so you should stick with the default.
+
+        use_rich: If ``True`` (the default), use rich_ to compute the repr of
+            locals.  If ``False`` or if rich_ is not installed, fall back to
+            a simpler algorithm.
+
+    .. seealso::
+        :doc:`exceptions` for a broader explanation of *structlog*'s exception
+        features.
+
+    .. versionchanged:: 24.3.0
+       Added *locals_max_length*, *locals_hide_sunder*, *locals_hide_dunder*,
+       *suppress* and *use_rich* arguments.
+
+    .. versionchanged:: 25.1.0
+       *locals_max_length* and *locals_max_string* may be None to disable
+       truncation.
     """
 
     def __init__(
         self,
-        show_locals: bool = True,
+        *,
+        show_locals: bool = SHOW_LOCALS,
+        locals_max_length: int = LOCALS_MAX_LENGTH,
         locals_max_string: int = LOCALS_MAX_STRING,
+        locals_hide_dunder: bool = True,
+        locals_hide_sunder: bool = False,
+        suppress: Iterable[str | ModuleType] = (),
         max_frames: int = MAX_FRAMES,
+        use_rich: bool = True,
     ) -> None:
-        if locals_max_string < 0:
-            raise ValueError(
-                f'"locals_max_string" must be >= 0: {locals_max_string}'
-            )
+        if locals_max_length is not None and locals_max_length < 0:
+            msg = f'"locals_max_length" must be >= 0: {locals_max_length}'
+            raise ValueError(msg)
+        if locals_max_string is not None and locals_max_string < 0:
+            msg = f'"locals_max_string" must be >= 0: {locals_max_string}'
+            raise ValueError(msg)
         if max_frames < 2:
-            raise ValueError(f'"max_frames" must be >= 2: {max_frames}')
+            msg = f'"max_frames" must be >= 2: {max_frames}'
+            raise ValueError(msg)
         self.show_locals = show_locals
+        self.locals_max_length = locals_max_length
         self.locals_max_string = locals_max_string
+        self.locals_hide_dunder = locals_hide_dunder
+        self.locals_hide_sunder = locals_hide_sunder
+        self.suppress: Sequence[str] = []
+        for suppress_entity in suppress:
+            if not isinstance(suppress_entity, str):
+                if suppress_entity.__file__ is None:
+                    msg = (
+                        f'"suppress" item {suppress_entity!r} must be a '
+                        f"module with '__file__' attribute"
+                    )
+                    raise ValueError(msg)
+                path = os.path.dirname(suppress_entity.__file__)
+            else:
+                path = suppress_entity
+            path = os.path.normpath(os.path.abspath(path))
+            self.suppress.append(path)
         self.max_frames = max_frames
+        self.use_rich = use_rich
 
     def __call__(self, exc_info: ExcInfo) -> list[dict[str, Any]]:
         trace = extract(
             *exc_info,
             show_locals=self.show_locals,
+            locals_max_length=self.locals_max_length,
             locals_max_string=self.locals_max_string,
+            locals_hide_dunder=self.locals_hide_dunder,
+            locals_hide_sunder=self.locals_hide_sunder,
+            use_rich=self.use_rich,
         )
 
         for stack in trace.stacks:
@@ -266,5 +444,13 @@ class ExceptionDictTransformer:
                 *stack.frames[-half:],
             ]
 
-        stack_dicts = [asdict(stack) for stack in trace.stacks]
-        return stack_dicts
+        stacks = [asdict(stack) for stack in trace.stacks]
+        for stack_dict in stacks:
+            for frame_dict in stack_dict["frames"]:
+                if frame_dict["locals"] is None or any(
+                    frame_dict["filename"].startswith(path)
+                    for path in self.suppress
+                ):
+                    del frame_dict["locals"]
+
+        return stacks

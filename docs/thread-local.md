@@ -8,25 +8,20 @@ The standard library {mod}`contextvars` module provides a more feature-rich supe
 Therefore, as of 22.1.0, the `structlog.threadlocal` module is frozen and will be removed after May 2023.
 :::
 
-```{eval-rst}
-.. testsetup:: *
-
-   import structlog
-   structlog.configure(
-       processors=[structlog.processors.KeyValueRenderer()],
-   )
+```{testsetup} *
+import structlog
+structlog.configure(
+      processors=[structlog.processors.KeyValueRenderer()],
+)
 ```
 
-```{eval-rst}
-.. testcleanup:: *
-
-   import structlog
-   structlog.reset_defaults()
-
+```{testcleanup} *
+import structlog
+structlog.reset_defaults()
 ```
 
 
-## The `merge_threadlocal` Processor
+## The `merge_threadlocal` processor
 
 *structlog* provides a simple set of functions that allow explicitly binding certain fields to a global (thread-local) context and merge them later using a processor into the event dict.
 
@@ -48,7 +43,7 @@ These functions map 1:1 to the {doc}`contextvars` APIs, so please use those inst
 - {func}`structlog.contextvars.get_merged_contextvars`
 
 
-## Thread-local Contexts
+## Thread-local contexts
 
 *structlog* also provides thread-local context storage in a form that you may already know from [*Flask*](https://flask.palletsprojects.com/en/latest/design/#thread-locals) and that makes the *entire context* global to your thread or greenlet.
 
@@ -56,28 +51,25 @@ This makes its behavior more difficult to reason about which is why we generally
 Therefore, there are currently no plans to re-implement this behavior on top of context variables.
 
 
-### Wrapped Dicts
+### Wrapped dicts
 
 In order to make your context thread-local, *structlog* ships with a function that can wrap any dict-like class to make it usable for thread-local storage: {func}`structlog.threadlocal.wrap_dict`.
 
 Within one thread, every instance of the returned class will have a *common* instance of the wrapped dict-like class:
 
-```{eval-rst}
-.. doctest::
-
-   >>> from structlog.threadlocal import wrap_dict
-   >>> WrappedDictClass = wrap_dict(dict)
-   >>> d1 = WrappedDictClass({"a": 1})
-   >>> d2 = WrappedDictClass({"b": 2})
-   >>> d3 = WrappedDictClass()
-   >>> d3["c"] = 3
-   >>> d1 is d3
-   False
-   >>> d1 == d2 == d3 == WrappedDictClass()
-   True
-   >>> d3  # doctest: +ELLIPSIS
-   <WrappedDict-...({'a': 1, 'b': 2, 'c': 3})>
-
+```{doctest}
+>>> from structlog.threadlocal import wrap_dict
+>>> WrappedDictClass = wrap_dict(dict)
+>>> d1 = WrappedDictClass({"a": 1})
+>>> d2 = WrappedDictClass({"b": 2})
+>>> d3 = WrappedDictClass()
+>>> d3["c"] = 3
+>>> d1 is d3
+False
+>>> d1 == d2 == d3 == WrappedDictClass()
+True
+>>> d3  # doctest: +ELLIPSIS
+<WrappedDict-...({'a': 1, 'b': 2, 'c': 3})>
 ```
 
 To enable thread-local context use the generated class as the context class:
@@ -93,44 +85,37 @@ As all instances of a wrapped dict-like class share the same data, in the case a
 
 `structlog.threadlocal.wrap_dict` returns always a completely *new* wrapped class:
 
-```{eval-rst}
-.. doctest::
-
-   >>> from structlog.threadlocal import wrap_dict
-   >>> WrappedDictClass = wrap_dict(dict)
-   >>> AnotherWrappedDictClass = wrap_dict(dict)
-   >>> WrappedDictClass() != AnotherWrappedDictClass()
-   True
-   >>> WrappedDictClass.__name__  # doctest: +SKIP
-   WrappedDict-41e8382d-bee5-430e-ad7d-133c844695cc
-   >>> AnotherWrappedDictClass.__name__   # doctest: +SKIP
-   WrappedDict-e0fc330e-e5eb-42ee-bcec-ffd7bd09ad09
-
+```{doctest}
+>>> from structlog.threadlocal import wrap_dict
+>>> WrappedDictClass = wrap_dict(dict)
+>>> AnotherWrappedDictClass = wrap_dict(dict)
+>>> WrappedDictClass() != AnotherWrappedDictClass()
+True
+>>> WrappedDictClass.__name__  # doctest: +SKIP
+WrappedDict-41e8382d-bee5-430e-ad7d-133c844695cc
+>>> AnotherWrappedDictClass.__name__   # doctest: +SKIP
+WrappedDict-e0fc330e-e5eb-42ee-bcec-ffd7bd09ad09
 ```
 
 In order to be able to bind values temporarily to a logger, `structlog.threadlocal` comes with a [context manager](https://docs.python.org/2/library/stdtypes.html#context-manager-types): {func}`structlog.threadlocal.tmp_bind`:
 
-```{eval-rst}
-.. testsetup:: ctx
-
-   from structlog import PrintLogger, wrap_logger
-   from structlog.threadlocal import tmp_bind, wrap_dict
-   WrappedDictClass = wrap_dict(dict)
-   log = wrap_logger(PrintLogger(), context_class=WrappedDictClass)
+```{testsetup} ctx
+from structlog import PrintLogger, wrap_logger
+from structlog.threadlocal import tmp_bind, wrap_dict
+WrappedDictClass = wrap_dict(dict)
+log = wrap_logger(PrintLogger(), context_class=WrappedDictClass)
 ```
 
-```{eval-rst}
-.. doctest:: ctx
-
-   >>> log.bind(x=42)  # doctest: +ELLIPSIS
-   <BoundLoggerFilteringAtNotset(context=<WrappedDict-...({'x': 42})>, ...)>
-   >>> log.msg("event!")
-   x=42 event='event!'
-   >>> with tmp_bind(log, x=23, y="foo") as tmp_log:
-   ...     tmp_log.msg("another event!")
-   x=23 y='foo' event='another event!'
-   >>> log.msg("one last event!")
-   x=42 event='one last event!'
+```{doctest} ctx
+>>> log.bind(x=42)  # doctest: +ELLIPSIS
+<BoundLoggerFilteringAtNotset(context=<WrappedDict-...({'x': 42})>, ...)>
+>>> log.msg("event!")
+x=42 event='event!'
+>>> with tmp_bind(log, x=23, y="foo") as tmp_log:
+...     tmp_log.msg("another event!")
+x=23 y='foo' event='another event!'
+>>> log.msg("one last event!")
+x=42 event='one last event!'
 ```
 
 The state before the `with` statement is saved and restored once it's left.
@@ -138,7 +123,7 @@ The state before the `with` statement is saved and restored once it's left.
 If you want to detach a logger from thread-local data, there's {func}`structlog.threadlocal.as_immutable`.
 
 
-#### Downsides & Caveats
+#### Downsides & caveats
 
 The convenience of having a thread-local context comes at a price though:
 
@@ -175,44 +160,24 @@ The convenience of having a thread-local context comes at a price though:
 
 ```{eval-rst}
 .. module:: structlog.threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: bind_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: unbind_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: bound_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: get_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: get_merged_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: merge_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: clear_threadlocal
-```
 
-```{eval-rst}
 .. autofunction:: wrap_dict
-```
 
-```{eval-rst}
 .. autofunction:: tmp_bind(logger, **tmp_values)
-```
 
-```{eval-rst}
 .. autofunction:: as_immutable
 ```

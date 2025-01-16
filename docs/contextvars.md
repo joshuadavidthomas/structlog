@@ -2,26 +2,28 @@
 
 # Context Variables
 
-```{eval-rst}
-.. testsetup:: *
-
-   import structlog
+```{testsetup}
+import structlog
 ```
 
-```{eval-rst}
-.. testcleanup:: *
-
-   import structlog
-   structlog.reset_defaults()
+```{testcleanup}
+import structlog
+structlog.reset_defaults()
 ```
 
 The {mod}`contextvars` module in the Python standard library allows having a global *structlog* context that is local to the current execution context.
-The execution context can be thread-local if using threads, or using primitives based on {mod}`asyncio`, or [*greenlet*](https://greenlet.readthedocs.io/) respectively.
+The execution context can be thread-local if using threads, stored in the {mod}`asyncio` event loop, or [*greenlet*](https://greenlet.readthedocs.io/) respectively.
 
 For example, you may want to bind certain values like a request ID or the peer's IP address at the beginning of a web request and have them logged out along with the local contexts you build within our views.
 
 For that *structlog* provides the {mod}`structlog.contextvars` module with a set of functions to bind variables to a context-local context.
 This context is safe to be used both in threaded as well as asynchronous code.
+
+:::{warning}
+Since the storage mechanics of your context variables is different for each concurrency method, they are _isolated_ from each other.
+
+This can be a problem in hybrid applications like those based on [*starlette*](https://www.starlette.io) (this [includes FastAPI](https://github.com/tiangolo/fastapi/discussions/5999)) where context variables set in a synchronous context don't appear in logs from an async context and vice versa.
+:::
 
 The general flow is:
 
@@ -35,57 +37,55 @@ The general flow is:
 
 We're sorry the word *context* means three different things in this itemization depending on ... context.
 
-```{eval-rst}
-.. doctest::
-
-   >>> from structlog.contextvars import (
-   ...     bind_contextvars,
-   ...     bound_contextvars,
-   ...     clear_contextvars,
-   ...     merge_contextvars,
-   ...     unbind_contextvars,
-   ... )
-   >>> from structlog import configure
-   >>> configure(
-   ...     processors=[
-   ...         merge_contextvars,
-   ...         structlog.processors.KeyValueRenderer(key_order=["event", "a"]),
-   ...     ]
-   ... )
-   >>> log = structlog.get_logger()
-   >>> # At the top of your request handler (or, ideally, some general
-   >>> # middleware), clear the contextvars-local context and bind some common
-   >>> # values:
-   >>> clear_contextvars()
-   >>> bind_contextvars(a=1, b=2)
-   {'a': <Token var=<ContextVar name='structlog_a' default=Ellipsis at ...> at ...>, 'b': <Token var=<ContextVar name='structlog_b' default=Ellipsis at ...> at ...>}
-   >>> # Then use loggers as per normal
-   >>> # (perhaps by using structlog.get_logger() to create them).
-   >>> log.info("hello")
-   event='hello' a=1 b=2
-   >>> # Use unbind_contextvars to remove a variable from the context.
-   >>> unbind_contextvars("b")
-   >>> log.info("world")
-   event='world' a=1
-   >>> # You can also bind key-value pairs temporarily.
-   >>> with bound_contextvars(b=2):
-   ...    log.info("hi")
-   event='hi' a=1 b=2
-   >>> # Now it's gone again.
-   >>> log.info("hi")
-   event='hi' a=1
-   >>> # And when we clear the contextvars state again, it goes away.
-   >>> # a=None is printed due to the key_order argument passed to
-   >>> # KeyValueRenderer, but it is NOT present anymore.
-   >>> clear_contextvars()
-   >>> log.info("hi there")
-   event='hi there' a=None
+```{doctest}
+>>> from structlog.contextvars import (
+...     bind_contextvars,
+...     bound_contextvars,
+...     clear_contextvars,
+...     merge_contextvars,
+...     unbind_contextvars,
+... )
+>>> from structlog import configure
+>>> configure(
+...     processors=[
+...         merge_contextvars,
+...         structlog.processors.KeyValueRenderer(key_order=["event", "a"]),
+...     ]
+... )
+>>> log = structlog.get_logger()
+>>> # At the top of your request handler (or, ideally, some general
+>>> # middleware), clear the contextvars-local context and bind some common
+>>> # values:
+>>> clear_contextvars()
+>>> bind_contextvars(a=1, b=2)
+{'a': <Token var=<ContextVar name='structlog_a' default=Ellipsis at ...> at ...>, 'b': <Token var=<ContextVar name='structlog_b' default=Ellipsis at ...> at ...>}
+>>> # Then use loggers as per normal
+>>> # (perhaps by using structlog.get_logger() to create them).
+>>> log.info("hello")
+event='hello' a=1 b=2
+>>> # Use unbind_contextvars to remove a variable from the context.
+>>> unbind_contextvars("b")
+>>> log.info("world")
+event='world' a=1
+>>> # You can also bind key-value pairs temporarily.
+>>> with bound_contextvars(b=2):
+...    log.info("hi")
+event='hi' a=1 b=2
+>>> # Now it's gone again.
+>>> log.info("hi")
+event='hi' a=1
+>>> # And when we clear the contextvars state again, it goes away.
+>>> # a=None is printed due to the key_order argument passed to
+>>> # KeyValueRenderer, but it is NOT present anymore.
+>>> clear_contextvars()
+>>> log.info("hi there")
+event='hi there' a=None
 ```
 
 
 ## Support for `contextvars.Token`
 
-If e.g. your request handler calls a helper function that needs to temporarily override some contextvars before restoring them back to their original values, you can use the {class}`~contextvars.Token`s returned by {func}`~structlog.contextvars.bind_contextvars` along with {func}`~structlog.contextvars.reset_contextvars` to accomplish this (much like how {meth}`contextvars.ContextVar.reset` works):
+If, for example, your request handler calls a helper function that needs to temporarily override some contextvars before restoring them back to their original values, you can use the {class}`~contextvars.Token`s returned by {func}`~structlog.contextvars.bind_contextvars` along with {func}`~structlog.contextvars.reset_contextvars` to accomplish this (much like how {meth}`contextvars.ContextVar.reset` works):
 
 ```python
 def foo():
@@ -101,7 +101,7 @@ def _helper():
 
 (flask-example)=
 
-## Example: Flask and Thread-Local Data
+## Example: Flask and thread-local data
 
 Let's assume you want to bind a unique request ID, the URL path, and the peer's IP to every log entry by storing it in thread-local storage that is managed by context variables:
 
