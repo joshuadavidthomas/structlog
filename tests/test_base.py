@@ -13,6 +13,7 @@ from structlog._config import _CONFIG
 from structlog.exceptions import DropEvent
 from structlog.processors import KeyValueRenderer
 from structlog.testing import ReturnLogger
+from tests.utils import CustomError
 
 
 def build_bl(logger=None, processors=None, context=None):
@@ -28,11 +29,14 @@ def build_bl(logger=None, processors=None, context=None):
 
 class TestBinding:
     def test_repr(self):
-        bl = build_bl(processors=[1, 2, 3], context={})
+        """
+        repr() of a BoundLoggerBase shows its context and processors.
+        """
+        bl = build_bl(processors=[1, 2, 3], context={"A": "B"})
 
-        assert ("<BoundLoggerBase(context={}, processors=[1, 2, 3])>") == repr(
-            bl
-        )
+        assert (
+            "<BoundLoggerBase(context={'A': 'B'}, processors=[1, 2, 3])>"
+        ) == repr(bl)
 
     def test_binds_independently(self):
         """
@@ -161,9 +165,9 @@ class TestProcessing:
         If the chain raises anything else than DropEvent, the error is not
         swallowed.
         """
-        b = build_bl(processors=[raiser(ValueError)])
+        b = build_bl(processors=[raiser(CustomError)])
 
-        with pytest.raises(ValueError):
+        with pytest.raises(CustomError):
             b._process_event("", "boom", {})
 
     def test_last_processor_returns_string(self):
@@ -223,10 +227,9 @@ class TestProcessing:
         """
         logger = stub(msg=lambda *args, **kw: (args, kw))
         b = build_bl(logger, processors=[lambda *_: object()])
-        with pytest.raises(ValueError) as exc:
-            b._process_event("", "foo", {})
 
-        assert exc.value.args[0].startswith("Last processor didn't return")
+        with pytest.raises(ValueError, match="Last processor didn't return"):
+            b._process_event("", "foo", {})
 
 
 class TestProxying:

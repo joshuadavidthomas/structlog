@@ -2,6 +2,7 @@
 # This file is dual licensed under the terms of the Apache License, Version
 # 2.0, and the MIT License.  See the LICENSE file in the root of this
 # repository for complete details.
+
 import inspect
 import threading
 
@@ -9,8 +10,9 @@ import pytest
 
 import structlog
 
+from structlog import get_logger, wrap_logger
 from structlog._base import BoundLoggerBase
-from structlog._config import wrap_logger
+from structlog._config import BoundLoggerLazyProxy
 from structlog.testing import ReturnLogger
 from structlog.threadlocal import (
     _CONTEXT,
@@ -26,6 +28,7 @@ from structlog.threadlocal import (
     unbind_threadlocal,
     wrap_dict,
 )
+from tests.utils import CustomError
 
 
 try:
@@ -89,16 +92,35 @@ class TestTmpBind:
         tmp_bind cleans up properly on exceptions.
         """
         log = log.bind(y=23)
-        with pytest.raises(ValueError), pytest.deprecated_call():
-            with tmp_bind(log, x=42, y="foo") as tmp_log:
-                assert (
-                    {"y": "foo", "x": 42}
-                    == tmp_log._context._dict
-                    == log._context._dict
-                )
-                raise ValueError
+
+        with pytest.raises(  # noqa: PT012
+            CustomError
+        ), pytest.deprecated_call(), tmp_bind(log, x=42, y="foo") as tmp_log:
+            assert (
+                {"y": "foo", "x": 42}
+                == tmp_log._context._dict
+                == log._context._dict
+            )
+            raise CustomError
 
         assert {"y": 23} == log._context._dict
+
+    def test_tmp_bind_lazy(self):
+        """
+        tmp_bind works with a BoundLoggerLazyProxy -- i.e. before the first
+        bind.
+        """
+        with pytest.deprecated_call():
+            structlog.configure(context_class=wrap_dict(dict))
+
+        log = get_logger()
+
+        assert isinstance(log, BoundLoggerLazyProxy)
+
+        with pytest.deprecated_call(), tmp_bind(log, x=42) as tmp_log:
+            assert {"x": 42} == tmp_log._context._dict
+
+        assert {} == log._context
 
 
 class TestAsImmutable:
@@ -408,9 +430,8 @@ class TestBoundThreadlocal:
         """
         Bindings are cleaned up
         """
-        with pytest.deprecated_call():
-            with bound_threadlocal(x=42, y="foo"):
-                assert {"x": 42, "y": "foo"} == get_threadlocal()
+        with pytest.deprecated_call(), bound_threadlocal(x=42, y="foo"):
+            assert {"x": 42, "y": "foo"} == get_threadlocal()
 
         with pytest.deprecated_call():
             assert {} == get_threadlocal()
@@ -435,10 +456,9 @@ class TestBoundThreadlocal:
         """
         New bindings inside bound_threadlocal are preserved after the clean up
         """
-        with pytest.deprecated_call():
-            with bound_threadlocal(x=42):
-                bind_threadlocal(y="foo")
-                assert {"x": 42, "y": "foo"} == get_threadlocal()
+        with pytest.deprecated_call(), bound_threadlocal(x=42):
+            bind_threadlocal(y="foo")
+            assert {"x": 42, "y": "foo"} == get_threadlocal()
 
         with pytest.deprecated_call():
             assert {"y": "foo"} == get_threadlocal()

@@ -1,7 +1,8 @@
 # Processors
 
 The true power of *structlog* lies in its *combinable log processors*.
-A log processor is a regular callable, i.e. a function or an instance of a class with a `__call__()` method.
+A log processor is a regular callable or in other words:
+A function or an instance of a class with a `__call__()` method.
 
 (chains)=
 
@@ -29,7 +30,7 @@ The return value of each processor is passed on to the next one as `event_dict` 
 
 :::{note}
 *structlog* only looks at the return value of the **last** processor.
-That means that as long as you control the next processor in the chain (i.e. the processor that will get your return value passed as an argument), you can return whatever you want.
+That means that as long as you control the next processor in the chain (the processor that will get your return value passed as an argument), you can return whatever you want.
 
 Returning a modified event dictionary from your processors is just a convention to make processors composable.
 :::
@@ -95,7 +96,7 @@ But we can do better than that!
 
 (cond-drop)=
 
-How about dropping only log entries that are marked as coming from a certain peer (e.g. monitoring)?
+How about dropping only log entries that are marked as coming from a certain peer (for example, monitoring)?
 
 ```python
 class ConditionalDropper:
@@ -105,9 +106,9 @@ class ConditionalDropper:
     def __call__(self, logger, method_name, event_dict):
         """
         >>> cd = ConditionalDropper("127.0.0.1")
-        >>> cd(None, None, {"event": "foo", "peer": "10.0.0.1"})
+        >>> cd(None, "", {"event": "foo", "peer": "10.0.0.1"})
         {'peer': '10.0.0.1', 'event': 'foo'}
-        >>> cd(None, None, {"event": "foo", "peer": "127.0.0.1"})
+        >>> cd(None, "", {"event": "foo", "peer": "127.0.0.1"})
         Traceback (most recent call last):
         ...
         DropEvent
@@ -123,7 +124,7 @@ It does **not** use the standard library, but it does use its names and order of
 
 (adapting)=
 
-## Adapting and Rendering
+## Adapting and rendering
 
 An important role is played by the *last* processor because its duty is to adapt the `event_dict` into something the logging methods of the *wrapped logger* understand.
 With that, it's also the *only* processor that needs to know anything about the underlying system.
@@ -155,7 +156,7 @@ Advanced log aggregation and analysis tools like [*Logstash*](https://www.elasti
 For a list of shipped processors, check out the {ref}`API documentation <procs>`.
 
 
-## Third-Party Packages
+## Third-Party packages
 
 *structlog* was specifically designed to be as composable and reusable as possible, so whatever you're missing:
 chances are, you can solve it with a processor!

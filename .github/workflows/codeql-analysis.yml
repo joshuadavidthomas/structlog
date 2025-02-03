@@ -1,10 +1,7 @@
-name: "CodeQL"
+---
+name: CodeQL
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
   schedule:
     - cron: "41 3 * * 6"
 
@@ -23,30 +20,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ["python"]
+        language: [python]
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v1
-        with:
-          egress-policy: block
-          allowed-endpoints: >
-            api.github.com:443
-            bootstrap.pypa.io:443
-            files.pythonhosted.org:443
-            github.com:443
-            pypi.org:443
-
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
+        uses: github/codeql-action/autobuild@v3
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3

@@ -65,7 +65,7 @@ Whenever you call one of those methods on the *bound logger*, it will:
 [^str]: {any}`str`, {any}`bytes`, or {any}`bytearray` to be exact.
 
 
-### Step-by-Step Example
+### Step-by-Step example
 
 Assuming you've left the default configuration and have:
 
@@ -77,12 +77,12 @@ logger = structlog.get_logger()
 log = logger.bind(foo="bar")
 ```
 
-Now `log` is a *bound logger* of type {class}`~structlog.typing.FilteringBoundLogger` (but in the default config there's no filtering).
+Now, `log` is a *bound logger* of type {class}`~structlog.typing.FilteringBoundLogger` (but in the default config there's no filtering).
 `log`'s context is `{"foo": "bar"}` and its wrapped logger is a {class}`structlog.PrintLogger`.
 
-Now if you call `log.info("Hello, %s!", "world", number=42)` the following happens:
+If you call `log.info("Hello, %s!", "world", number=42)` now, the following happens:
 
-1. `"world"` gets interpolated into `"Hello, %s!"`, making the event "Hello, world!".
+1. `"world"` gets interpolated into `"Hello, %s!"`, making the event "Hello, world!"[^interpolation].
 2. The *bound logger*'s context gets copied and the key-value pairs from the `info` call are added to it.
    It becomes an *event dict* and is `{"foo": "bar", "number": 42}` now.
 3. The event from step 1 is added too.
@@ -90,7 +90,7 @@ Now if you call `log.info("Hello, %s!", "world", number=42)` the following happe
 4. The *event dict* is fed into the [processor chain](processors.md).
    In this case the processors add a timestamp and the log level name to the *event dict*.
 
-   Before it hits the last processor, the *event dict* looks something like `{"foo": "bar", "number": 42, "event": "Hello, world!", "level": "info", "timestamp": "2022-10-13 16:29:27"}` now.
+   Before it hits the last processor, the *event dict* looks something like `{"foo": "bar", "number": 42, "event": "Hello, world!", "level": "info", "timestamp": "2022-10-13 16:29:27"}`.
 
    The last processor is {class}`structlog.dev.ConsoleRenderer` and renders the *event dict* into a colorful string[^json].
 5. Finally, the *wrapped logger*'s (a {class}`~structlog.PrintLogger`) `info()` method is called with that string.
@@ -99,10 +99,11 @@ Now if you call `log.info("Hello, %s!", "world", number=42)` the following happe
    By replacing the last processor, you decide on the **format** of your logs.
    For example, if you wanted JSON logs, you just have to replace the last processor with {class}`structlog.processors.JSONRenderer`.
 
+[^interpolation]: String interpolation only takes place if you pass positional arguments.
 
 (filtering)=
 
-## Filtering by Log Levels
+## Filtering by log levels
 
 Filtering based on log levels can be done in a processor very easily[^stdlib], however that means unnecessary performance overhead through function calls.
 We care a lot about performance and that's why *structlog*'s default *bound logger* class implements level-filtering as close to the users as possible: in the *bound logger*'s logging methods *before* even creating an *event dict* and starting the processor chain.
@@ -145,45 +146,43 @@ Passing `20` instead of `logging.INFO` would have worked too.
 [^stdlib]: And it's in fact supported for standard library logging with the {func}`structlog.stdlib.filter_by_level` processor.
 
 
-## Wrapping Loggers Manually
+## Wrapping loggers manually
 
 In practice, you won't be instantiating bound loggers yourself.
 You will configure *structlog* as explained in the {doc}`next chapter <configuration>` and then just call {func}`structlog.get_logger`.
 
 However, in some rare cases you may not want to do that.
-For example because you don't control how you get the logger that you would like to wrap (famous example: *Celery*).
-For that times there is the {func}`structlog.wrap_logger` function that can be used to wrap a logger -- optionally without any global state (i.e. configuration):
+For example because you don't control how you get the logger that you would like to wrap (famous example: Celery).
+For that times there is the {func}`structlog.wrap_logger` function that can be used to wrap a logger -- optionally without any global state (in other words, configuration):
 
 (proc)=
 
-```{eval-rst}
-.. doctest::
-
-   >>> import structlog
-   >>> class CustomPrintLogger:
-   ...     def msg(self, message):
-   ...         print(message)
-   >>> def proc(logger, method_name, event_dict):
-   ...     print("I got called with", event_dict)
-   ...     return repr(event_dict)
-   >>> log = structlog.wrap_logger(
-   ...     CustomPrintLogger(),
-   ...     wrapper_class=structlog.BoundLogger,
-   ...     processors=[proc],
-   ... )
-   >>> log2 = log.bind(x=42)
-   >>> log == log2
-   False
-   >>> log.msg("hello world")
-   I got called with {'event': 'hello world'}
-   {'event': 'hello world'}
-   >>> log2.msg("hello world")
-   I got called with {'x': 42, 'event': 'hello world'}
-   {'x': 42, 'event': 'hello world'}
-   >>> log3 = log2.unbind("x")
-   >>> log == log3
-   True
-   >>> log3.msg("nothing bound anymore", foo="but you can structure the event too")
-   I got called with {'foo': 'but you can structure the event too', 'event': 'nothing bound anymore'}
-   {'foo': 'but you can structure the event too', 'event': 'nothing bound anymore'}
+```{doctest}
+>>> import structlog
+>>> class CustomPrintLogger:
+...     def msg(self, message):
+...         print(message)
+>>> def proc(logger, method_name, event_dict):
+...     print("I got called with", event_dict)
+...     return repr(event_dict)
+>>> log = structlog.wrap_logger(
+...     CustomPrintLogger(),
+...     wrapper_class=structlog.BoundLogger,
+...     processors=[proc],
+... )
+>>> log2 = log.bind(x=42)
+>>> log == log2
+False
+>>> log.msg("hello world")
+I got called with {'event': 'hello world'}
+{'event': 'hello world'}
+>>> log2.msg("hello world")
+I got called with {'x': 42, 'event': 'hello world'}
+{'x': 42, 'event': 'hello world'}
+>>> log3 = log2.unbind("x")
+>>> log == log3
+True
+>>> log3.msg("nothing bound anymore", foo="but you can structure the event too")
+I got called with {'foo': 'but you can structure the event too', 'event': 'nothing bound anymore'}
+{'foo': 'but you can structure the event too', 'event': 'nothing bound anymore'}
 ```

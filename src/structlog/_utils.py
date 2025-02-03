@@ -9,27 +9,10 @@ Generic utilities.
 
 from __future__ import annotations
 
-import errno
 import sys
 
-from typing import Any, Callable
-
-
-def until_not_interrupted(f: Callable[..., Any], *args: Any, **kw: Any) -> Any:
-    """
-    Retry until *f* succeeds or an exception that isn't caused by EINTR occurs.
-
-    :param f: A callable like a function.
-    :param *args: Positional arguments for *f*.
-    :param **kw: Keyword arguments for *f*.
-    """
-    while True:
-        try:
-            return f(*args, **kw)
-        except OSError as e:
-            if e.args[0] == errno.EINTR:
-                continue
-            raise
+from contextlib import suppress
+from typing import Any
 
 
 def get_processname() -> str:
@@ -41,8 +24,7 @@ def get_processname() -> str:
         # Errors may occur if multiprocessing has not finished loading
         # yet - e.g. if a custom import hook causes third-party code
         # to run when multiprocessing calls import.
-        try:
+        with suppress(Exception):
             processname = mp.current_process().name
-        except Exception:
-            pass
+
     return processname

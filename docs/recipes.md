@@ -1,34 +1,34 @@
 # Recipes
 
-Thanks to the fact that *structlog* is entirely based on dictionaries and callables, the sky is the limit with what you an achieve.
-In the beginning that can be daunting, so here are a few examples of tasks that have come up repeatedly.
+Because *structlog* is entirely based on dictionaries and callables, the sky is the limit with what you can achieve.
+That can be daunting in the beginning, so here are a few examples of tasks that have come up repeatedly.
 
 Please note that recipes related to integration with frameworks have an [own chapter](frameworks.md).
 
 (rename-event)=
 
-## Renaming the `event` Key
+## Renaming the `event` key
 
 The name of the event is hard-coded in *structlog* to `event`.
 But that doesn't mean it has to be called that in your logs.
 
-With the {class}`structlog.processors.EventRenamer` processor you can for instance rename  the log message to `msg` and use `event` for something custom, that you bind to `_event` in your code:
+With the {class}`structlog.processors.EventRenamer` processor, you can, for instance, rename  the log message to `msg` and use `event` for something custom, that you bind to `_event` in your code:
 
 ```pycon
 >>> from structlog.processors import EventRenamer
 >>> event_dict = {"event": "something happened", "_event": "our event!"}
->>> EventRenamer("msg", "_event")(None, None, event_dict)
+>>> EventRenamer("msg", "_event")(None, "", event_dict)
 {'msg': 'something happened', 'event': 'our event!'}
 ```
 
 (finer-filtering)=
 
-## Fine-Grained Log-Level Filtering
+## Fine-grained log-level filtering
 
 *structlog*'s native log levels as provided by {func}`structlog.make_filtering_bound_logger` only know **one** log level – the one that is passed to `make_filtering_bound_logger()`.
 Sometimes, that can be a bit too coarse, though.
 
-You can achieve that with by adding the {class}`~structlog.processors.CallsiteParameterAdder` processor and writing a simple processor that acts on the data you get.
+You can achieve finer control by adding the {class}`~structlog.processors.CallsiteParameterAdder` processor and writing a simple processor that acts on the call site data added.
 
 Let's assume you have the following code:
 
@@ -78,23 +78,18 @@ Pick the data you're interested in from the {class}`structlog.processors.Callsit
 
 (custom-wrappers)=
 
-## Custom Wrappers
+## Custom wrappers
 
-```{eval-rst}
-.. testsetup:: *
-
-   import structlog
-   structlog.configure(
-       processors=[structlog.processors.KeyValueRenderer()],
-   )
+```{testsetup}
+import structlog
+structlog.configure(
+    processors=[structlog.processors.KeyValueRenderer()],
+)
 ```
 
-```{eval-rst}
-.. testcleanup:: *
-
-   import structlog
-   structlog.reset_defaults()
-
+```{testcleanup}
+import structlog
+structlog.reset_defaults()
 ```
 
 The type of the *bound loggers* that are returned by {func}`structlog.get_logger()` is called the *wrapper class*, because it wraps the original logger that takes care of the output.
@@ -105,9 +100,9 @@ That class still ships with *structlog* and can wrap *any* logger class by inter
 
 Nowadays, the default is a {class}`structlog.typing.FilteringBoundLogger` that imitates standard library’s log levels with the possibility of efficiently filtering at a certain level (inactive log methods are a plain `return None` each).
 
-If you’re integrating with {mod}`logging` or Twisted, you may was to use one of their specific *bound loggers* ({class}`structlog.stdlib.BoundLogger` and {class}`structlog.twisted.BoundLogger`, respectively).
+If you’re integrating with {mod}`logging` or Twisted, you may want to use one of their specific *bound loggers* ({class}`structlog.stdlib.BoundLogger` and {class}`structlog.twisted.BoundLogger`, respectively).
 
-—
+---
 
 On top of that all, you can also write your own wrapper classes.
 To make it easy for you, *structlog* comes with the class {class}`structlog.BoundLoggerBase` which takes care of all data binding duties so you just add your log methods if you choose to sub-class it.
@@ -118,23 +113,21 @@ To make it easy for you, *structlog* comes with the class {class}`structlog.Boun
 
 It’s easiest to demonstrate with an example:
 
-```{eval-rst}
-.. doctest::
-
-   >>> from structlog import BoundLoggerBase, PrintLogger, wrap_logger
-   >>> class SemanticLogger(BoundLoggerBase):
-   ...    def info(self, event, **kw):
-   ...        if not "status" in kw:
-   ...            return self._proxy_to_logger("info", event, status="ok", **kw)
-   ...        else:
-   ...            return self._proxy_to_logger("info", event, **kw)
-   ...
-   ...    def user_error(self, event, **kw):
-   ...        self.info(event, status="user_error", **kw)
-   >>> log = wrap_logger(PrintLogger(), wrapper_class=SemanticLogger)
-   >>> log = log.bind(user="fprefect")
-   >>> log.user_error("user.forgot_towel")
-   user='fprefect' status='user_error' event='user.forgot_towel'
+```{doctest}
+>>> from structlog import BoundLoggerBase, PrintLogger, wrap_logger
+>>> class SemanticLogger(BoundLoggerBase):
+...    def info(self, event, **kw):
+...        if not "status" in kw:
+...            return self._proxy_to_logger("info", event, status="ok", **kw)
+...        else:
+...            return self._proxy_to_logger("info", event, **kw)
+...
+...    def user_error(self, event, **kw):
+...        self.info(event, status="user_error", **kw)
+>>> log = wrap_logger(PrintLogger(), wrapper_class=SemanticLogger)
+>>> log = log.bind(user="fprefect")
+>>> log.user_error("user.forgot_towel")
+user='fprefect' status='user_error' event='user.forgot_towel'
 ```
 
 You can observe the following:
@@ -148,7 +141,7 @@ These two methods and one attribute are all you need to write own *bound loggers
 [dry]: https://en.wikipedia.org/wiki/Don%27t_repeat_yourself
 
 
-## Passing Context to Worker Threads
+## Passing context to worker threads
 
 Thread-local context data based on [context variables](contextvars.md) is -- as the name says -- local to the thread that binds it.
 When using threads to process work in parallel, you have to pass the thread-local context **into** the worker threads.
@@ -193,3 +186,12 @@ def manager(request_id: str):
 ```
 
 See the [issue 425](https://github.com/hynek/structlog/issues/425) for a more complete example.
+
+
+## Switching console output to standard error
+
+When using structlog without standard library integration and want the log output to go to standard error (*stderr*) instead of standard out (*stdout*), you can switch with a single line of configuration:
+
+```python
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(sys.stderr))
+```

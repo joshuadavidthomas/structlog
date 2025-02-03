@@ -7,10 +7,12 @@
 Make sure our configuration examples actually pass the type checker.
 """
 
+from __future__ import annotations
+
 import logging
 import logging.config
 
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 import structlog
 
@@ -27,8 +29,9 @@ bls.info("hello", whom="world", x=42, y={})
 
 def bytes_dumps(
     __obj: Any,
-    default: Optional[Callable[[Any], Any]] = None,
-    option: Optional[int] = None,
+    /,
+    default: Callable[[Any], Any] | None = None,
+    option: int | None = None,
 ) -> bytes:
     """
     Test with orjson's signature taken from
@@ -44,6 +47,7 @@ structlog.configure(
 
 structlog.configure(
     processors=[
+        structlog.stdlib.render_to_log_args_and_kwargs,
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
@@ -114,14 +118,14 @@ root_logger.setLevel(logging.INFO)
 
 
 timestamper = structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S")
-shared_processors: List[structlog.typing.Processor] = [
+shared_processors: list[structlog.typing.Processor] = [
     structlog.stdlib.add_log_level,
     timestamper,
 ]
 
 structlog.configure(
-    processors=shared_processors
-    + [
+    processors=[
+        *shared_processors,
         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -309,6 +313,26 @@ async def typecheck_filtering_return_async() -> None:
     await fblogger.alog(logging.CRITICAL, "async log")
 
 
+async def typecheck_stdlib_async() -> None:
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
+    await logger.adebug("async debug")
+    await logger.ainfo("async info")
+    await logger.awarning("async warning")
+    await logger.aerror("async error")
+    await logger.afatal("fatal error")
+    await logger.aexception("async exception")
+    await logger.acritical("async critical")
+    await logger.alog(logging.CRITICAL, "async log")
+
+
+def typecheck_bound_logger_return() -> None:
+    blogger: structlog.BoundLogger = structlog.get_logger(__name__)
+    blog = blogger.bind(key1="value1", key2="value2", key3="value3")
+    blog = blog.unbind("key1")
+    blog = blog.try_unbind("bad_key")
+    blog = blog.new(new="value")
+
+
 # Structured tracebacks and ExceptionRenderer with ExceptionDictTransformer
 struct_tb: structlog.tracebacks.Trace = structlog.tracebacks.extract(
     ValueError, ValueError("onoes"), None
@@ -328,3 +352,9 @@ structlog.configure(
 
 fbl: FilteringBoundLogger = structlog.get_logger()
 fbl.info("Hello %s! The answer is %d.", "World", 42, x=1)
+
+
+# Introspection
+level: int = fbl.get_effective_level()
+is_active: bool = fbl.is_enabled_for(logging.INFO)
+is_active = fbl.is_enabled_for(20)

@@ -3,8 +3,17 @@
 # 2.0, and the MIT License.  See the LICENSE file in the root of this
 # repository for complete details.
 
+import os
+
 from importlib import metadata
 
+
+# Set canonical URL from the Read the Docs Domain
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+
+# Tell Jinja2 templates the build is running on Read the Docs
+if os.environ.get("READTHEDOCS", "") == "True":
+    html_context = {"READTHEDOCS": True}
 
 # We want an image in the README and include the README in the docs.
 suppress_warnings = ["image.nonlocal_uri"]
@@ -17,10 +26,12 @@ extensions = [
     "notfound.extension",
     "sphinx.ext.autodoc",
     "sphinx.ext.autodoc.typehints",
+    "sphinx.ext.napoleon",
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
     "sphinxcontrib.mermaid",
+    "sphinxext.opengraph",
 ]
 
 myst_enable_extensions = [
@@ -28,12 +39,16 @@ myst_enable_extensions = [
     "smartquotes",
     "deflist",
 ]
+mermaid_init_js = "mermaid.initialize({startOnLoad:true,theme:'neutral'});"
+
+ogp_image = "_static/structlog_logo.png"
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = ".rst"
+source_suffix = [".rst", ".md"]
 
 # The master toctree document.
 master_doc = "index"
@@ -41,7 +56,7 @@ master_doc = "index"
 # General information about the project.
 project = "structlog"
 author = "Hynek Schlawack"
-copyright = f"2013, { author }"
+copyright = f"2013, {author}"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -71,14 +86,11 @@ nitpick_ignore = [
     ("py:class", "WrappedLogger"),
     ("py:class", "structlog.threadlocal.TLLogger"),
     ("py:class", "structlog.typing.EventDict"),
+    ("py:class", "ModuleType"),
 ]
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 add_function_parentheses = True
-
-# If true, the current module name will be prepended to all description
-# unit titles (such as .. function::).
-# add_module_names = True
 
 # Move type hints into the description block, instead of the func definition.
 autodoc_typehints = "description"
@@ -86,36 +98,20 @@ autodoc_typehints_description_target = "documented"
 
 # -- Options for HTML output --------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
 html_theme = "furo"
-html_theme_options = {}
-html_logo = "_static/structlog_logo_small_transparent.png"
+html_theme_options = {
+    "top_of_page_buttons": [],
+    "light_css_variables": {
+        "font-stack": "B612, sans-serif",
+        "font-stack--monospace": "BerkeleyMono, MonoLisa, ui-monospace, "
+        "SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace",
+    },
+}
+html_logo = "_static/structlog_logo.svg"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
 htmlhelp_basename = "structlogdoc"
-
-_logo = (
-    "https://www.structlog.org/en/latest/_static/"
-    "structlog_logo_small_transparent.png"
-)
-_descr = (
-    "structlog makes logging in Python faster, less painful, and more "
-    "powerful by adding structure to your log entries."
-)
-_title = "structlog: Structured Logging for Python"
-rst_epilog = f"""\
-.. meta::
-    :property=og:type: website
-    :property=og:site_name: { _title }
-    :property=og:description: { _descr }
-    :property=og:author: Hynek Schlawack
-    :property=og:image: { _logo }
-    :twitter:title: { _title }
-    :twitter:image: { _logo }
-    :twitter:creator: @hynek
-"""
 
 latex_documents = [
     ("index", "structlog.tex", "structlog Documentation", "Author", "manual")
@@ -163,4 +159,7 @@ linkcheck_ignore = [
 # Twisted's trac tends to be slow
 linkcheck_timeout = 300
 
-intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "rich": ("https://rich.readthedocs.io/en/stable/", None),
+}

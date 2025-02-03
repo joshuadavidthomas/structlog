@@ -10,29 +10,27 @@ You can install *structlog* from [PyPI](https://pypi.org/project/structlog/) usi
 $ python -m pip install structlog
 ```
 
-If you want pretty exceptions in development (you know you do!), additionally install either [*Rich*] or [*better-exceptions*].
-Try both to find out which one you like better -- the screenshot in the README and docs homepage is rendered by *Rich*.
+If you want pretty exceptions in development (you know you do!), additionally install either [Rich] or [*better-exceptions*].
+Try both to find out which one you like better -- the screenshot in the README and docs homepage is rendered by Rich.
 
-On **Windows**, you also have to install [*Colorama*](https://pypi.org/project/colorama/) if you want colorful output beside exceptions.
+On **Windows**, you also have to install [Colorama](https://pypi.org/project/colorama/) if you want colorful output beside exceptions.
 
 
-## Your First Log Entry
+## Your first log entry
 
 A lot of effort went into making *structlog* accessible without reading pages of documentation.
 As a result, the simplest possible usage looks like this:
 
-```{eval-rst}
-.. doctest::
-
-   >>> import structlog
-   >>> log = structlog.get_logger()
-   >>> log.info("hello, %s!", "world", key="value!", more_than_strings=[1, 2, 3])  # doctest: +SKIP
-   2022-10-07 10:41:29 [info     ] hello, world!   key=value! more_than_strings=[1, 2, 3]
+```{doctest}
+>>> import structlog
+>>> log = structlog.get_logger()
+>>> log.info("hello, %s!", "world", key="value!", more_than_strings=[1, 2, 3])  # doctest: +SKIP
+2022-10-07 10:41:29 [info     ] hello, world!   key=value! more_than_strings=[1, 2, 3]
 ```
 
 Here, *structlog* takes advantage of its default settings:
 
-- Output is sent to **[standard out](https://en.wikipedia.org/wiki/Standard_out#Standard_output_.28stdout.29)** instead doing nothing.
+- Output is sent to **[standard out](https://en.wikipedia.org/wiki/Standard_out#Standard_output_.28stdout.29)** instead of doing nothing.
 - It **imitates** standard library {mod}`logging`'s **log level names** for familiarity.
   By default, no level-based filtering is done, but it comes with a **very fast [filtering machinery](filtering)**.
 - Like in `logging`, positional arguments are [**interpolated into the message string using %**](https://docs.python.org/3/library/stdtypes.html#old-string-formatting).
@@ -41,7 +39,7 @@ Here, *structlog* takes advantage of its default settings:
 - All keywords are formatted using {class}`structlog.dev.ConsoleRenderer`.
   That in turn uses {func}`repr` to serialize **any value to a string**.
 - It's rendered in nice **{doc}`colors <console-output>`**.
-- If you have [*Rich*] or [*better-exceptions*] installed, **exceptions** will be rendered in **colors** and with additional **helpful information**.
+- If you have [Rich] or [*better-exceptions*] installed, **exceptions** will be rendered in **colors** and with additional **helpful information**.
 
 Please note that even in most complex logging setups the example would still look just like that thanks to {doc}`configuration`.
 Using the defaults, as above, is equivalent to:
@@ -56,7 +54,7 @@ structlog.configure(
         structlog.processors.add_log_level,
         structlog.processors.StackInfoRenderer(),
         structlog.dev.set_exc_info,
-        structlog.processors.TimeStamper(),
+        structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
         structlog.dev.ConsoleRenderer()
     ],
     wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
@@ -74,7 +72,7 @@ log = structlog.get_logger()
 - For brevity and to enable doctests, all further examples in *structlog*'s documentation use the more simplistic {class}`~structlog.processors.KeyValueRenderer()` without timestamps.
 :::
 
-Here you go, structured logging!
+There you go, structured logging!
 
 
 However, this alone wouldn't warrant its own package.
@@ -83,7 +81,7 @@ So let's go a step further.
 
 (building-ctx)=
 
-## Building a Context
+## Building a context
 
 Imagine a hypothetical web application that wants to log out all relevant data with just the APIs that we've introduced so far:
 
@@ -109,7 +107,7 @@ At this point, you'll be tempted to write a closure like:
 
 ```python
 def log_closure(event):
-   log.info(event, user_agent=user_agent, peer_ip=peer_ip)
+    log.info(event, user_agent=user_agent, peer_ip=peer_ip)
 ```
 
 inside of the view.
@@ -122,7 +120,7 @@ Let's have a look at a better approach:
 
 ```python
 def view(request):
-    log = logger.bind(
+    log = log.bind(
         user_agent=request.get("HTTP_USER_AGENT", "UNKNOWN"),
         peer_ip=request.client_addr,
     )
@@ -169,7 +167,7 @@ For that, *structlog* gives you thread-local context storage based on the {mod}`
 See {doc}`contextvars` for more information and a more complete example.
 
 
-## Manipulating Log Entries in Flight
+## Manipulating log entries in flight
 
 Now that your log events are dictionaries, it's also much easier to manipulate them than if they were plain strings.
 
@@ -180,24 +178,20 @@ The next processor in the chain receives that returned dictionary instead of the
 Let's assume you wanted to add a timestamp to every event dict.
 The processor would look like this:
 
-```{eval-rst}
-.. doctest::
-
-  >>> import datetime
-  >>> def timestamper(_, __, event_dict):
-  ...     event_dict["time"] = datetime.datetime.now().isoformat()
-  ...     return event_dict
+```{doctest}
+>>> import datetime
+>>> def timestamper(_, __, event_dict):
+...     event_dict["time"] = datetime.datetime.now().isoformat()
+...     return event_dict
 ```
 
 Plain Python, plain dictionaries.
 Now you have to tell *structlog* about your processor by {doc}`configuring <configuration>` it:
 
-```{eval-rst}
-.. doctest::
-
-  >>> structlog.configure(processors=[timestamper, structlog.processors.KeyValueRenderer()])
-  >>> structlog.get_logger().info("hi")  # doctest: +SKIP
-  event='hi' time='2018-01-21T09:37:36.976816'
+```{doctest}
+>>> structlog.configure(processors=[timestamper, structlog.processors.KeyValueRenderer()])
+>>> structlog.get_logger().info("hi")  # doctest: +SKIP
+event='hi' time='2018-01-21T09:37:36.976816'
 ```
 
 
@@ -211,16 +205,14 @@ While usually it's a string or bytes, there's no rule saying it _has_ to be a st
 
 So assuming you want to follow [best practices](logging-best-practices.md) and render your event dictionary to JSON that is picked up by a log aggregation system like ELK or Graylog, *structlog* comes with batteries included -- you just have to tell it to use its {class}`~structlog.processors.JSONRenderer`:
 
-```{eval-rst}
-.. doctest::
-
-  >>> structlog.configure(processors=[structlog.processors.JSONRenderer()])
-  >>> structlog.get_logger().info("hi")
-  {"event": "hi"}
+```{doctest}
+>>> structlog.configure(processors=[structlog.processors.JSONRenderer()])
+>>> structlog.get_logger().info("hi")
+{"event": "hi"}
 ```
 
 
-## *structlog* and Standard Library's `logging`
+## *structlog* and standard library's `logging`
 
 While *structlog*'s loggers are very fast and sufficient for the majority of our users, you're not bound to them.
 Instead, it's been designed from day one to wrap your *existing* loggers and **add** *structure* and *incremental context building* to them.
@@ -233,31 +225,32 @@ As noted before, the fastest way to transform *structlog* into a `logging`-frien
 
 ## asyncio
 
-*structlog* comes with two approaches to support asynchronous logging.
-
-The default *bound logger* that you get back from {func}`structlog.get_logger()` doesn't have just the familiar log methods like `debug()` or `info()`, but also their async cousins, that simply prefix the name with an a:
+The default *bound logger* that you get back from {func}`structlog.get_logger()` and standard library's {class}`structlog.stdlib.BoundLogger` don't have just the familiar log methods like `debug()` or `info()`, but also their async cousins, that simply prefix the name with an a:
 
 ```pycon
 >>> import asyncio
 >>> logger = structlog.get_logger()
 >>> async def f():
-...     await logger.ainfo("hi!")
+...     await logger.ainfo("async hi!")
 ...
+>>> logger.info("Loop isn't running yet, but we can log!")
+2023-04-06 07:25:48 [info     ] Loop isn't running yet, but we can log!
 >>> asyncio.run(f())
-2022-10-18 13:23:37 [info     ] hi!
+2023-04-06 07:26:08 [info     ] async hi!
 ```
 
 You can use the sync and async logging methods interchangeably within the same application.
 
----
-
-The standard library integration on the other hand offers an asynchronous wrapper class {class}`structlog.stdlib.AsyncBoundLogger`.
 
 ## Liked what you saw?
 
 Now you're all set for the rest of the user's guide and can start reading about [bound loggers](bound-loggers.md) -- the heart of *structlog*.
 
+```{include} ../README.md
+:start-after: <!-- begin tutorials -->
+:end-before: <!-- end tutorials -->
+```
 
 [*better-exceptions*]: https://github.com/qix-/better-exceptions
 [recipe]: https://docs.python.org/3/howto/logging-cookbook.html#implementing-structured-logging
-[*Rich*]: https://github.com/Textualize/rich
+[Rich]: https://github.com/Textualize/rich

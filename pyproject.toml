@@ -10,46 +10,36 @@ dynamic = ["readme", "version"]
 name = "structlog"
 description = "Structured Logging for Python"
 authors = [{ name = "Hynek Schlawack", email = "hs@ox.cx" }]
-requires-python = ">=3.7"
-license = { file = "COPYRIGHT" }
+requires-python = ">=3.8"
+license = "MIT OR Apache-2.0"
 keywords = ["logging", "structured", "structure", "log"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "License :: OSI Approved :: MIT License",
-    "Natural Language :: English",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
-    "Programming Language :: Python",
-    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: System :: Logging",
+    "Typing :: Typed",
 ]
-dependencies = [
-    "typing-extensions; python_version<'3.8'",
-    "importlib_metadata; python_version<'3.8'",
-]
+dependencies = ["typing-extensions; python_version<'3.11'"]
 
 [project.urls]
 Documentation = "https://www.structlog.org/"
-Changelog = "https://www.structlog.org/en/stable/changelog.html"
-"Bug Tracker" = "https://github.com/hynek/structlog/issues"
-"Source Code" = "https://github.com/hynek/structlog"
+Changelog = "https://github.com/hynek/structlog/blob/main/CHANGELOG.md"
+GitHub = "https://github.com/hynek/structlog"
 Funding = "https://github.com/sponsors/hynek"
-Tidelift = "https://tidelift.com/subscription/pkg/pypi-structlog?utm_source=pypi-structlog&utm_medium=pypi"
-Ko-fi = "https://ko-fi.com/the_hynek"
-
+Tidelift = "https://tidelift.com?utm_source=lifter&utm_medium=referral&utm_campaign=hynek"
+Mastodon = "https://mastodon.social/@hynek"
+Bluesky = "https://bsky.app/profile/hynek.me"
+Twitter = "https://twitter.com/hynek"
 
 [project.optional-dependencies]
 tests = [
-    "coverage[toml]",
     "freezegun>=0.2.8",
     "pretend",
     "pytest-asyncio>=0.17",
@@ -58,21 +48,23 @@ tests = [
 ]
 # Need Twisted & Rich for stubs.
 # Otherwise mypy fails in tox.
-typing = ["mypy", "rich", "twisted"]
+typing = ["mypy>=1.4", "rich", "twisted"]
 docs = [
+    "cogapp",
     "furo",
     "myst-parser",
     "sphinx",
     "sphinx-notfound-page",
     "sphinxcontrib-mermaid",
+    "sphinxext-opengraph",
     "twisted",
 ]
-dev = ["structlog[tests,typing,docs]"]
+dev = ["structlog[tests,typing]"]
 
 
 [tool.hatch.version]
 source = "vcs"
-raw-options = { version_scheme = "no-guess-dev" }
+raw-options = { local_scheme = "no-local-version" }
 
 
 [tool.pytest.ini_options]
@@ -81,6 +73,7 @@ testpaths = "tests"
 xfail_strict = true
 filterwarnings = ["once::Warning"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 
 [tool.coverage.run]
@@ -89,7 +82,7 @@ branch = true
 source = ["structlog"]
 
 [tool.coverage.paths]
-source = ["src", ".tox/*/site-packages"]
+source = ["src", ".tox/py*/**/site-packages"]
 
 [tool.coverage.report]
 show_missing = true
@@ -113,28 +106,86 @@ exclude_lines = [
 ]
 
 
-[tool.black]
+[tool.interrogate]
+omit-covered-files = true
+verbose = 2
+fail-under = 100
+whitelist-regex = ["test_.*"]
+
+
+[tool.ruff]
+src = ["src", "tests"]
 line-length = 79
 
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "A",       # shadowing is fine
+    "ANN",     # Mypy is better at this
+    "ARG",     # unused arguments are common w/ interfaces
+    "C901",    # sometimes you trade complexity for performance
+    "COM",     # Formatter takes care of our commas
+    "D",       # We prefer our own docstring style.
+    "E501",    # leave line-length enforcement to formatter
+    "EM101",   # simple strings are fine
+    "FBT",     # bools are our friends
+    "FIX",     # Yes, we want XXX as a marker.
+    "INP001",  # sometimes we want Python files outside of packages
+    "ISC001",  # conflicts with formatter
+    "N802",    # some names are non-pep8 due to stdlib logging / Twisted
+    "N803",    # ditto
+    "N806",    # ditto
+    "PLR0913", # leave complexity to me
+    "PLR2004", # numbers are sometimes fine
+    "PLW2901", # overwriting a loop var can be useful
+    "RUF001",  # leave my smart characters alone
+    "RUF001",  # leave my smart characters alone
+    "SLF001",  # private members are accessed by friendly functions
+    "T201",    # prints are fine
+    "TC",      # TYPE_CHECKING blocks break autodocs
+    "TD",      # we don't follow other people's todo style
+    "TID252",  # Relative imports are fine
+    "TRY003",  # simple strings are fine
+    "TRY004",  # too many false negatives
+    "TRY300",  # else blocks are nice, but code-locality is nicer
+    "PTH",     # pathlib can be slow, so no point to rewrite
+]
 
-[tool.isort]
-profile = "attrs"
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "B018",    # "useless" expressions can be useful in tests
+    "BLE",     # tests have different rules around exceptions
+    "EM",      # tests have different rules around exceptions
+    "LOG001",  # need to instantiate log messages in tests
+    "PLC1901", # empty strings are falsey, but are less specific in tests
+    "RUF012",  # no type hints in tests
+    "S",       # it's test; chill out security
+    "SIM300",  # Yoda rocks in tests
+    "TRY",     # tests have different rules around exceptions
+]
+
+[tool.ruff.lint.isort]
+lines-between-types = 1
+lines-after-imports = 2
 
 
 [tool.mypy]
 strict = true
+pretty = true
 
 show_error_codes = true
 enable_error_code = ["ignore-without-code"]
-
 ignore_missing_imports = true
 
 warn_return_any = false
 
-
 [[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "tests.typing.*"
+ignore_errors = false
 
 
 [tool.hatch.metadata.hooks.fancy-pypi-readme]
@@ -143,7 +194,7 @@ content-type = "text/markdown"
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
 text = '''<p align="center">
     <img
-        src="https://www.structlog.org/en/stable/_static/structlog_logo_small_transparent.png"
+        src="https://www.structlog.org/en/stable/_static/structlog_logo_small.png"
         alt="structlog mascot"
     />
 </p>
@@ -172,6 +223,56 @@ start-after = "<!-- changelog follows -->"
 pattern = "\n(###.+?\n)## "
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+text = """
+---
+
+[Full Changelog →](https://www.structlog.org/en/stable/changelog.html)
+
+
+"""
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
 path = "README.md"
 start-at = "## Credits"
 end-before = "<!-- begin-meta -->"
+
+# Point sponsor image URLs to versions.
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'docs\/_static\/sponsors'
+replacement = 'https://www.structlog.org/en/$HFPR_VERSION/_static/sponsors'
+
+
+[[tool.sponcon.sponsors]]
+title = "Variomedia AG"
+url = "https://www.variomedia.de/"
+img = "Variomedia.svg"
+
+[[tool.sponcon.sponsors]]
+title = "Tidelift"
+url = "https://tidelift.com/?utm_source=lifter&utm_medium=referral&utm_campaign=hynek"
+img = "Tidelift.svg"
+
+[[tool.sponcon.sponsors]]
+title = "Klaviyo"
+url = "https://klaviyo.com/"
+img = "Klaviyo.svg"
+
+[[tool.sponcon.sponsors]]
+title = "emsys renewables"
+url = "https://www.emsys-renewables.com/"
+img = "emsys-renewables.svg"
+
+[[tool.sponcon.sponsors]]
+title = "FilePreviews"
+url = "https://filepreviews.io/"
+img = "FilePreviews.svg"
+
+[[tool.sponcon.sponsors]]
+title = "Privacy Solutions"
+url = "https://privacy-solutions.org/"
+img = "Privacy-Solutions.svg"
+
+[[tool.sponcon.sponsors]]
+title = "Polar"
+url = "https://polar.sh/"
+img = "Polar.svg"
